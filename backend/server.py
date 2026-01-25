@@ -5,7 +5,7 @@ from spacy.tokens import Span
 import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
-
+from fastapi.middleware.cors import CORSMiddleware
 
 from diag_model import run_inference_on_sample, load_final_model
 
@@ -47,6 +47,16 @@ target_matcher.add(target_rules)
 
 app = FastAPI()
 
+<<<<<<< Updated upstream
+=======
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],  # React dev server ports
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+>>>>>>> Stashed changes
 
 @app.get("/")
 def root():
