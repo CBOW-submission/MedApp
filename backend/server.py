@@ -13,6 +13,7 @@ analyzer = AnalyzerEngine()
 anonymizer = AnonymizerEngine()
 
 
+from fastapi.middleware.cors import CORSMiddleware
 
 from diag_model import run_inference_on_sample, load_final_model
 
@@ -54,6 +55,13 @@ target_matcher.add(target_rules)
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],  # React dev server ports
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
