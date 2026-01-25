@@ -5,6 +5,13 @@ from spacy.tokens import Span
 import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
+from presidio_analyzer import AnalyzerEngine
+from presidio_anonymizer import AnonymizerEngine
+
+# Initialize the engines
+analyzer = AnalyzerEngine()
+anonymizer = AnonymizerEngine()
+
 
 
 from diag_model import run_inference_on_sample, load_final_model
@@ -78,7 +85,19 @@ class Disease(BaseModel):
 
 @app.post("/extract", response_model=list[Symptom])
 def extract_symptoms(rawnote: RawText) -> list[Symptom]:
-    doc = nlp(rawnote.text)
+    # 1. Detect all types of PII
+    analyzer_results = analyzer.analyze(text=rawnote.text, language='en')
+    
+    # 2. Anonymize using default placeholders
+    # By default, Presidio replaces the text with the entity type (e.g., <PERSON>)
+    anonymized_result = anonymizer.anonymize(
+        text=rawnote.text,
+        analyzer_results=analyzer_results
+    )
+    
+    print(anonymized_result.text)
+    # Output: Contact <PERSON> at <EMAIL_ADDRESS> or call <PHONE_NUMBER>.
+    doc = nlp(anonymized_result.text)
 
     header = f"{'Entity':<25} | {'HPO ID':<8} | {'Status':<12} | {'Section':<15} | {'Official Name'}"
     print(header)
