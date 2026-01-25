@@ -5,3 +5,4 @@ uv.lock
 mimic-iv-ext-direct-1.0.0/
 qwen1.7b-symptoms-precautions-phase2/
 kg.feather
+.venv
