@@ -17,6 +17,8 @@ model,tokenizer,device = load_final_model()
 odf = pd.read_feather("official.feather")
 
 kg = pd.read_feather("kg.feather")
+std = pd.read_feather("./symptom_to_disease.feather")
+scores = pd.read_feather("./norm_scores.feather")
 # Ensure ID is consistent (using int for matching logic)
 odf['symptom_id'] = odf['symptom_id'].astype(int)
 id_to_name = dict(zip(odf['symptom_id'], odf['symptom_name']))
@@ -59,6 +61,12 @@ class Symptom(BaseModel):
     start: int
     end : int
     status: str
+
+class Disease(BaseModel):
+    # MONDO_ID : int
+    name: str
+    f1: float
+    confidence_score: float
 
 
 @app.post("/extract", response_model = list[Symptom])
@@ -114,3 +122,50 @@ def extract_symptoms(rawnote: RawText)-> list[Symptom]:
 @app.post("/aianalysis", response_model = RawText)
 def ai_analysis(rawnote: RawText)->RawText:
     return RawText(text=run_inference_on_sample(model,tokenizer,rawnote.text,device))
+
+@app.post("/ddx", response_model = list[Disease])
+def ddx(symptoms: list[Symptom]) -> list[Disease]:
+    diseases = []
+    dname = set()
+    stoms = set(x.HPO_ID for x in symptoms)
+    
+    # Get all diseases that have any of patient's symptoms
+    for symptom in symptoms:
+        rds = set(std.query(f'symptom_id=="{symptom.HPO_ID}"')['disease_name'].tolist())
+        dname = dname.union(rds)
+    
+    for name in dname:
+        symptoms_in_disease = set(std.query(f'disease_name=="{name}"')["symptom_id"].astype(int).tolist())
+        matches = symptoms_in_disease.intersection(stoms)
+        
+        # Skip if no matches at all
+        if len(matches) == 0:
+            continue
+        
+        # F1 calculation with safety
+        p = len(matches) / len(stoms)
+        r = len(matches) / (len(symptoms_in_disease) if len(symptoms_in_disease) <= 10 else 10)
+        
+        if p + r == 0:
+            f1 = 0
+        else:
+            f1 = (2 * p * r) / (p + r)
+        
+        # Confidence: use weights of matching symptoms
+        conf_weights = []
+        for match in matches:
+            # Get the weight for this symptom
+            weight = scores.loc[scores['symptom_id'] == match, 'norm_score']
+            if not weight.empty:
+                conf_weights.append(weight.iloc[0])
+        
+        if conf_weights:
+            confidence_score = 0.8 * max(conf_weights) + 0.2 * (sum(conf_weights) / len(conf_weights))
+        else:
+            confidence_score = 0
+        
+        diseases.append(Disease(name=name, f1=f1, confidence_score=confidence_score))
+    
+    # Sort by combined score
+    diseases.sort(key=lambda x: (0.5 * x.f1 + 0.5 * x.confidence_score), reverse=True)
+    return diseases[:5]  # Return top 5
