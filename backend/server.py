@@ -226,7 +226,7 @@ def ddx(symptoms: list[Symptom]) -> list[Disease]:
                 conf_weights.append(weight.iloc[0])
 
         if conf_weights:
-            confidence_score = 0.8 * max(conf_weights) + 0.2 * (
+            confidence_score = 0.1 * max(conf_weights) + 0.9 * (
                 sum(conf_weights) / len(conf_weights)
             )
         else:
