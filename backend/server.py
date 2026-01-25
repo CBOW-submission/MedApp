@@ -221,7 +221,7 @@ def ddx(symptoms: list[Symptom]) -> list[Disease]:
         conf_weights = []
         for match in matches:
             # Get the weight for this symptom
-            weight = scores.loc[scores["symptom_id"] == match, "score"]
+            weight = scores.loc[scores["symptom_id"] == match, "norm_score"]
             if not weight.empty:
                 conf_weights.append(weight.iloc[0])
 
@@ -237,3 +237,43 @@ def ddx(symptoms: list[Symptom]) -> list[Disease]:
     # Sort by combined score
     diseases.sort(key=lambda x: (0.5 * x.f1 + 0.5 * x.confidence_score), reverse=True)
     return diseases[:5]  # Return top 5
+
+from fastapi import UploadFile, File
+from PIL import Image
+import pytesseract
+import io
+
+@app.post("/ocr", response_model=RawText)
+async def ocr_image(file: UploadFile = File(...)) -> RawText:
+    """
+    Endpoint to perform OCR on an uploaded image and anonymize the extracted text.
+    """
+    try:
+        # Read the uploaded file
+        image_data = await file.read()
+
+        # Open image with PIL
+        image = Image.open(io.BytesIO(image_data))
+
+        # Perform OCR using pytesseract
+        extracted_text = pytesseract.image_to_string(image)
+
+        # Detect PII in extracted text
+        analyzer_results = analyzer.analyze(text=extracted_text, language='en')
+
+        # Anonymize the text
+        anonymized_result = anonymizer.anonymize(
+            text=extracted_text,
+            analyzer_results=analyzer_results
+        )
+
+
+        print(f"Original text: {extracted_text}")
+        print(f"Anonymized text: {anonymized_result.text}")
+
+        return RawText(text=anonymized_result.text)
+
+    except Exception as e:
+        print(f"Error during OCR: {str(e)}")
+        return RawText(text="")
+
