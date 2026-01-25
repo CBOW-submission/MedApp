@@ -7,13 +7,9 @@ from pydantic import BaseModel
 
 
 
-# from diag_model import load_final_model,run_inference_on_sample
-# # model,tokenizer,device = load_final_model()
+from diag_model import run_inference_on_sample,load_final_model
+model,tokenizer,device = load_final_model()
 
-# @app.post("/aianalysis", response_model = RawText)
-# def ai_analysis(rawnote: RawText)->RawText:
-#     return RawText(text=run_inference_on_sample(model,tokenizer,rawnote.text,device))
-#
 
 
 
@@ -25,34 +21,6 @@ kg = pd.read_feather("kg.feather")
 odf['symptom_id'] = odf['symptom_id'].astype(int)
 id_to_name = dict(zip(odf['symptom_id'], odf['symptom_name']))
 
-symptoms = list(odf['symptom_id'])
-scores = {}
-for s_id in symptoms:
-    s_id_str = str(s_id)
-
-    # 1. Vectorized filtering (much faster than iterrows)
-    # Note: PrimeKG uses 'phenotype' for symptoms and 'disease' for diseases
-    mask = (
-        ((kg['x_id'].astype(str) == s_id_str) & (kg['y_type'] == 'disease')) |
-        ((kg['y_id'].astype(str) == s_id_str) & (kg['x_type'] == 'disease'))
-    )
-
-    matched_df = kg[mask]
-
-    if matched_df.empty:
-        results[s_id] = []
-        continue
-
-    # 2. Efficiently extract the name of the 'other' node
-    # If x is our symptom, we want y_name. If y is our symptom, we want x_name.
-    disease_names = matched_df.apply(
-        lambda row: row['y_name'] if str(row['x_id']) == s_id_str else row['x_name'],
-        axis=1
-    )
-
-    scores[s_id] = list(set(disease_names))
-
-print(scores)
 # 2. Initialize MedSpaCy with Context and Sectionizer
 # Adding 'medspacy_context' and 'medspacy_sectionizer' to the pipeline
 nlp = medspacy.load(enable=["medspacy_target_matcher", "medspacy_context", "medspacy_sectionizer"])
@@ -143,38 +111,6 @@ def extract_symptoms(rawnote: RawText)-> list[Symptom]:
 
 
 
-@app.post("/getscores")
-def get_scores(symptoms: list[int]):
-    results = {}
-
-    # Pre-convert IDs to strings if PrimeKG stores them as "12345" (strings)
-    # or ensure they match the format in your feather file.
-    for s_id in symptoms:
-        s_id_str = str(s_id)
-
-        # 1. Vectorized filtering (much faster than iterrows)
-        # Note: PrimeKG uses 'phenotype' for symptoms and 'disease' for diseases
-        mask = (
-            ((kg['x_id'].astype(str) == s_id_str) & (kg['y_type'] == 'disease')) |
-            ((kg['y_id'].astype(str) == s_id_str) & (kg['x_type'] == 'disease'))
-        )
-
-        matched_df = kg[mask]
-
-        if matched_df.empty:
-            results[s_id] = []
-            continue
-
-        # 2. Efficiently extract the name of the 'other' node
-        # If x is our symptom, we want y_name. If y is our symptom, we want x_name.
-        disease_names = matched_df.apply(
-            lambda row: row['y_name'] if str(row['x_id']) == s_id_str else row['x_name'],
-            axis=1
-        )
-
-        results[s_id] = list(set(disease_names))
-
-    return results
-
-
-
+@app.post("/aianalysis", response_model = RawText)
+def ai_analysis(rawnote: RawText)->RawText:
+    return RawText(text=run_inference_on_sample(model,tokenizer,rawnote.text,device))
